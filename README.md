@@ -54,6 +54,8 @@ python -m http.server 3000
 
 ```
 assistente-ia/
+├── api/
+│   └── chat.py             # Função serverless Vercel (stateless)
 ├── backend/
 │   ├── app.py              # API principal (FastAPI)
 │   ├── requirements.txt    # Dependências Python
@@ -61,6 +63,8 @@ assistente-ia/
 ├── frontend/
 │   ├── index.html          # Onboarding (configuração do perfil)
 │   └── chat.html           # Interface do assistente
+├── requirements.txt        # Dependências Python para Vercel
+├── vercel.json             # Rewrites para servir frontend e API juntos
 └── README.md
 ```
 

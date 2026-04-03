@@ -287,7 +287,6 @@
 </div>
 
 <script>
-const API = 'http://localhost:8000';
 
 // Perguntas embutidas no frontend — sem depender do backend para avançar
 const PERGUNTAS_LOCAL = {
@@ -394,28 +393,16 @@ document.addEventListener('keydown', e => {
   }
 });
 
-async function enviarOnboarding() {
+function enviarOnboarding() {
   const btn = document.getElementById('btn-responder');
   btn.disabled = true; btn.textContent = 'Salvando...';
 
-  // Salva localmente de qualquer forma
   localStorage.setItem('user_id', userId);
   localStorage.setItem('user_nome', nome);
   localStorage.setItem('cargo_tipo', cargoTipo);
   localStorage.setItem('onboarding_done', '1');
   localStorage.setItem('respostas', JSON.stringify(respostas));
-
-  // Tenta enviar pro backend (opcional — não bloqueia o fluxo)
-  try {
-    await fetch(`${API}/onboarding`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, nome, cargo_tipo: cargoTipo, respostas })
-    });
-  } catch(err) {
-    // backend offline: continua mesmo assim, mostra aviso no chat
-    console.warn('Backend offline. Perfil salvo localmente.');
-  }
+  localStorage.setItem('historico', JSON.stringify([]));
 
   document.getElementById('sucesso-nome').textContent = `Pronto, ${nome}!`;
   trocarTela('tela-sucesso');

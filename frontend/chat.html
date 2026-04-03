@@ -329,20 +329,30 @@
 </div>
 
 <script>
-const API = 'http://localhost:8000';
+const API = '/api/chat';
 const userId = localStorage.getItem('user_id');
-const userName = localStorage.getItem('user_nome') || 'Você';
-const cargoTipo = localStorage.getItem('cargo_tipo') || 'geral';
+const userName = localStorage.getItem('user_nome');
+const cargoTipo = localStorage.getItem('cargo_tipo');
+const respostas = JSON.parse(localStorage.getItem('respostas') || '{}');
+const historicoKey = 'historico';
+let historico = [];
+try {
+  historico = JSON.parse(localStorage.getItem(historicoKey) || '[]');
+} catch (err) {
+  historico = [];
+}
+if (!Array.isArray(historico)) {
+  historico = [];
+}
 
-// Redireciona se não fez onboarding
-if (!userId || !localStorage.getItem('onboarding_done')) {
+if (!userId || !userName || !cargoTipo || !localStorage.getItem('onboarding_done')) {
   window.location.href = 'index.html';
 }
 
 // Inicializa UI
 document.getElementById('sidebar-nome').textContent = userName;
-document.getElementById('header-titulo').textContent = `Olá, ${userName}`;
-document.getElementById('empty-titulo').textContent = `Olá, ${userName}! 👋`;
+document.getElementById('header-titulo').textContent = `${saudacao()}, ${userName}`;
+document.getElementById('empty-titulo').textContent = `${saudacao()}, ${userName}! 👋`;
 
 // Saudação baseada em horário
 function saudacao() {
@@ -389,18 +399,36 @@ function carregarSugestoes() {
   document.getElementById('sidebar-cargo').textContent = cargo.charAt(0).toUpperCase() + cargo.slice(1);
 }
 carregarSugestoes();
+renderHistorico();
 
-// ── Carregar perfil da API ──
-fetch(`${API}/perfil/${userId}`)
-  .then(r => r.json())
-  .then(data => {
-    if (data.cargo_tipo) {
-      localStorage.setItem('cargo_tipo', data.cargo_tipo);
-      document.getElementById('sidebar-cargo').textContent =
-        data.cargo_tipo.charAt(0).toUpperCase() + data.cargo_tipo.slice(1);
-      carregarSugestoes();
-    }
-  }).catch(() => {});
+function persistHistorico() {
+  localStorage.setItem(historicoKey, JSON.stringify(historico));
+}
+
+function renderMensagem(item) {
+  const tipo = item.role === 'assistant' ? 'bot' : 'user';
+  const msgs = document.getElementById('messages');
+  const inicial = userName.charAt(0).toUpperCase();
+  const div = document.createElement('div');
+  div.className = `msg ${tipo}`;
+  div.innerHTML = `
+    <div class="msg-avatar">${tipo === 'bot' ? '✦' : inicial}</div>
+    <div class="msg-content">
+      <div class="msg-bubble">${item.content}</div>
+      <div class="msg-time">${agora()}</div>
+      ${tipo === 'bot' ? `<div class="msg-actions"><button class="msg-action-btn" onclick="copiar(this, \`${item.content.replace(/`/g,'\\`')}\`)">📋 Copiar</button></div>` : ''}
+    </div>
+  `;
+  msgs.appendChild(div);
+}
+
+function renderHistorico() {
+  const msgs = document.getElementById('messages');
+  if (!historico.length) return;
+  msgs.innerHTML = '';
+  historico.forEach(renderMensagem);
+  scrollDown();
+}
 
 // ── Helpers ──
 function agora() {
@@ -424,19 +452,10 @@ function esconderEmpty() {
 
 function adicionarMsg(tipo, texto) {
   esconderEmpty();
-  const msgs = document.getElementById('messages');
-  const inicial = userName.charAt(0).toUpperCase();
-  const div = document.createElement('div');
-  div.className = `msg ${tipo}`;
-  div.innerHTML = `
-    <div class="msg-avatar">${tipo === 'bot' ? '✦' : inicial}</div>
-    <div class="msg-content">
-      <div class="msg-bubble">${texto}</div>
-      <div class="msg-time">${agora()}</div>
-      ${tipo === 'bot' ? `<div class="msg-actions"><button class="msg-action-btn" onclick="copiar(this, \`${texto.replace(/`/g,'\\`')}\`)">📋 Copiar</button></div>` : ''}
-    </div>
-  `;
-  msgs.appendChild(div);
+  const mensagem = { role: tipo === 'bot' ? 'assistant' : 'user', content: texto };
+  historico.push(mensagem);
+  persistHistorico();
+  renderMensagem(mensagem);
   scrollDown();
 }
 
@@ -462,33 +481,39 @@ async function enviar() {
   mostrarTyping(true);
 
   try {
-    const res = await fetch(`${API}/chat`, {
+    const res = await fetch(API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, mensagem: texto })
+      body: JSON.stringify({
+        nome: userName,
+        cargo_tipo: cargoTipo,
+        respostas,
+        historico,
+      }),
     });
     const data = await res.json();
     mostrarTyping(false);
-    adicionarMsg('bot', data.resposta || data.erro || 'Erro na resposta.');
+    if (!res.ok) {
+      throw new Error(data.detail || data.error || 'Erro na API');
+    }
+    adicionarMsg('bot', data.resposta || 'Erro na resposta.');
   } catch (err) {
     mostrarTyping(false);
-    adicionarMsg('bot', '⚠️ Não consegui conectar ao servidor. Verifique se o backend está rodando em localhost:8000.');
+    adicionarMsg('bot', '⚠️ Não consegui conectar ao servidor. Verifique a API em /api/chat.');
   }
 }
 
 function atalho(texto) {
-  document.getElementById('chat-input').value = texto;
-  document.getElementById('chat-input').focus();
-  autoResize(document.getElementById('chat-input'));
+  const input = document.getElementById('chat-input');
+  input.value = texto;
+  input.focus();
+  autoResize(input);
 }
 
-async function resetarChat() {
+function resetarChat() {
   if (!confirm('Limpar o histórico da conversa?')) return;
-  await fetch(`${API}/reset`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: userId })
-  });
+  localStorage.removeItem(historicoKey);
+  historico.length = 0;
   document.getElementById('messages').innerHTML = `
     <div class="empty-state" id="empty-state">
       <div class="empty-icon">✦</div>
